@@ -4,7 +4,7 @@
   Plugin Name: SeoSiti Framework
   Plugin URI:
   Description: Framework per l'utilizzo dei prodotti SeoSiti
-  Version: 1.0
+  Version: 1.1
   Author: SeoSiti Developing Team
   Author URI: https://www.seositimarketing.it/
   License: GPLv2 or later
@@ -21,9 +21,7 @@ require_once 'assets/interfaces/InterfaceController.php';
 require_once 'assets/interfaces/InterfaceView.php';
 
 //includo le classi
-require_once 'assets/classes/MyObject.php';
-require_once 'assets/classes/ObjectDAO.php';
-require_once 'assets/classes/PrinterView.php';
+require_once 'assets/classes/classes.php';
 
 //includo altre funzionalità
 require_once 'assets/functions.php';
