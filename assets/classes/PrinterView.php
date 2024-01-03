@@ -35,9 +35,109 @@ class PrinterView {
         $this->settimanaCorrente = $date->format("W");
     }
     
+    
+    /***********************************************************/
+    /*** FUNZIONI PER LA GESTIONE DELL'UTENTE WP ***/
+    /***********************************************************/
+    
+    
+    /**
+     * La funzione si occupa di restituire un form di salvataggio dell'utente Wp
+     * @param int|null $idWp
+     * @return string
+     */
+    protected function getUtenteWpFormFields(int|null $idWp=null): string{
+        $uWp = new UtenteWp();
+        $html = '';
+        $html .= '<fieldset class="form-group border p-3"><legend class="w-auto px-1">Campi Utente WP</legend>';   
+        if($idWp != null  && $idWp != 0){
+            //ho dei parametri, si tratta di un aggiornamento
+            $uWp->get($idWp);
+            //ID
+            $html .= $this->printInput(Modello::FLOAT(), Campo::NASCOSTO(), FRM_UWP.FRM_ID, '', Richiesto::NO(), $uWp->getID());
+            //Nome
+            $html .= $this->printInput(Modello::FLOAT(), Campo::TESTO(), FRM_UWP.FRM_NOME, LBL_NOME, Richiesto::NO(), $uWp->getNome());
+            //Cognome
+            $html .= $this->printInput(Modello::FLOAT(), Campo::TESTO(), FRM_UWP.FRM_COGNOME, LBL_COGNOME, Richiesto::NO(), $uWp->getCognome());
+            //Email (se è già stata inserita non può cambiare)
+            if($uWp->getEmail() != '' && $uWp->getEmail() != null){
+                $html .= $this->printInput(Modello::FLOAT(), Campo::EMAIL(), FRM_UWP.FRM_EMAIL, LBL_EMAIL, Richiesto::NO(), $uWp->getEmail(), Disabilitato::SI());
+            }
+            else{
+                $html .= $this->printInput(Modello::FLOAT(), Campo::EMAIL(), FRM_UWP.FRM_EMAIL, LBL_EMAIL, Richiesto::NO(), $uWp->getEmail());
+            }
+            //Password (se lasciata vuota, il sistema genera una password randomica)
+            $html .= $this->printInput(modello::FLOAT(), Campo::PASSWORD(), FRM_UWP.FRM_PSW, LBL_PASSWORD, Richiesto::NO(), $uWp->getPassword());
+           
+        }
+        else{
+            //non ho dei parametri, si tratta di un salvataggio
+            //Nome
+            $html .= $this->printInput(Modello::FLOAT(), Campo::TESTO(), FRM_UWP.FRM_NOME, LBL_NOME);
+            //Cognome
+            $html .= $this->printInput(Modello::FLOAT(), Campo::TESTO(), FRM_UWP.FRM_COGNOME, LBL_COGNOME);
+            //Email
+            $html .= $this->printInput(Modello::FLOAT(), Campo::EMAIL(), FRM_UWP.FRM_EMAIL, LBL_EMAIL);
+            //Password (se lasciata vuota, il sistema genera una password randomica)
+            $html .= $this->printInput(modello::FLOAT(), Campo::PASSWORD(), FRM_UWP.FRM_PSW, LBL_PASSWORD, Richiesto::NO());            
+        }
+        
+        $html .= '</fieldset>';
+        return $html;
+    }
+    
+    /**
+     * La funzione fa un controllo sui campi utente passati e restituisce un oggetto
+     * Utente WP
+     * @param string $email
+     * @return UtenteWp
+     */
+    protected function utenteWpCheckFields(string $email=null) :UtenteWp{
+        //devo controllare l'inserimento dei dati:
+        //Nome, Cognome, Email, Password       
+        $uWp = new UtenteWp();        
+          
+        //ID: not required
+        if($this->check(Campo::TESTO(), FRM_UWP.FRM_ID,'') !== false){
+            $uWp->setID($this->check(Campo::TESTO(), FRM_UWP.FRM_ID,''));
+        }        
+        //Nome: not required
+        if($this->check(Campo::TESTO(), FRM_UWP.FRM_NOME, LBL_NOME) !== false){
+            $uWp->setNome($this->check(Campo::TESTO(), FRM_UWP.FRM_NOME, LBL_NOME));
+        }
+        //Cognome: not required
+        if($this->check(Campo::TESTO(), FRM_UWP.FRM_COGNOME, LBL_COGNOME) !== false){
+            $uWp->setCognome($this->check(Campo::TESTO(), FRM_UWP.FRM_COGNOME, LBL_COGNOME));
+        }
+        //Email: not required
+        if($email == null){
+            if($this->check(campo::EMAIL(), FRM_UWP.FRM_EMAIL, LBL_EMAIL) !== false){
+                $uWp->setEmail($this->check(campo::EMAIL(), FRM_UWP.FRM_EMAIL, LBL_EMAIL));
+            }
+        }
+        else{
+            $uWp->setEmail($email);
+        }
+        //Password: not required
+        if($this->check(Campo::PASSWORD(), FRM_UWP.FRM_PSW, LBL_PASSWORD) !== false){
+            $uWp->setPassword($this->check(Campo::PASSWORD(), FRM_UWP.FRM_PSW, LBL_PASSWORD));
+        }
+        
+        //Imposto il nicename
+        $uWp->setNicename($uWp->getNome().' '.$uWp->getCognome());
+                
+        return $uWp;
+    }
+    
+    /***********************************************************/
+    /*** FINE FUNZIONI PER LA GESTIONE DELL'UTENTE WP ***/
+    /***********************************************************/
+    
+    
+    
     /***********************************************************/
     /*** AGGIORNAMENTO BLOCCHI CON LA CDN DI BOOTSTRAP v.5.3 ***/
-     /***********************************************************/
+    /***********************************************************/
    
     /**
      * Aggiunge un container al dom
@@ -113,7 +213,7 @@ class PrinterView {
     /**
      * La funzione restituisce la stampa di un oggetto html input (definito dal type)
      * @param string $modello
-     * @param string $type
+     * @param string $campo
      * @param string $name
      * @param string $label
      * @param string $required
@@ -121,37 +221,40 @@ class PrinterView {
      * @param string $disabled
      * @return string
      */
-    protected function printInput(string $modello, string $type, string $name, string $label, string $required='', string $value=null, string $disabled=''): string{
+    protected function printInput(string $modello, string $campo, string $name, string $label, string $required='', string $value=null, string $disabled=''): string{
         $html = ''; 
         if($value == null){
             if(isset($_POST[$name])){
                 $value = stripslashes($_POST[$name]);
             }           
         }
+        else{
+            $value = stripslashes($value);
+        }
         //Print Input si compone di tanti elementi a seconda del modello e del type.
         //modello: float e due-colonne
         //type: hidden, price, text, email, tel
         
-        if($type == 'hidden'){
+        if($campo == Campo::NASCOSTO()){
             $html .= '<input class="input-hidden" type="hidden" name="'.$name.'" value="'.$value.'" />';
             return $html;
         }
         
-        if($modello == 'float'){
-            $html .= $this->getFloatLayout($type, $name, $label, $required, $value, $disabled);
+        if($modello == Modello::FLOAT()){
+            $html .= $this->getFloatLayout($campo, $name, $label, $required, $value, $disabled);
         }
-        else if($modello == 'due-colonne'){
-            $html .= $this->get2ColonneLayout($type, $name, $label, $required, $value, $disabled);
+        else if($modello == Modello::DUE_COLONNE()){
+            $html .= $this->get2ColonneLayout($campo, $name, $label, $required, $value, $disabled);
         }
        
         return $html;
     }
     
-    private function getFloatLayout(string $type, string $name, string $label, string $required='', string $value=null, string $disabled='' ): string {
+    private function getFloatLayout(string $campo, string $name, string $label, string $required='', string $value=null, string $disabled='' ): string {
         $html = '';
         $input = '';
         $classDiv1 = 'form-floating mb-3';
-        if($type == 'price'){
+        if($campo == Campo::PREZZO()){
             $classDiv1 = 'input-group mb-3';
             $input .= '<div class="form-floating">'
                         . '<input type="number" min="0" step="0.01" class="form-control" name="'.$name.'" id="'.$name.'" value="'.$value.'" placeholder="'.$value.'" '.$required.' '.$disabled.'>'
@@ -159,13 +262,30 @@ class PrinterView {
                     . '</div>'
                     . '<span class="input-group-text">€</span>';
         }
-        else if($type == 'text' || $type == 'email' || $type == 'tel' || $type == 'file'){             
-            $input .= '<input type="'.$type.'" class="form-control" name="'.$name.'" id="'.$name.'" value="'.$value.'" placeholder="'.$value.'" '.$required.' '.$disabled.'>'
+        else if($campo == Campo::TESTO() || $campo == Campo::EMAIL() || $campo == Campo::TELEFONO()){             
+            $input .= '<input type="'.$campo.'" class="form-control" name="'.$name.'" id="'.$name.'" value="'.$value.'" placeholder="'.$value.'" '.$required.' '.$disabled.'>'
                         . '<label for="'.$name.'">'.$label.'</label>';
+        } 
+        else if($campo == Campo::PASSWORD()){                                    
+            $input .=  '<input name="'.$name.'" type="password" value="" class="input form-control" id="'.$campo.'" placeholder="'.$value.'" '.$required.' aria-label="password" aria-describedby="basic-addon1" />';
+            $input .= '<label class="form-label" for="'.$name.'">'.$label.'</label>';
+            $input .=  '<div class="input-group-append">
+                            <span class="input-group-text show-hide" onclick="password_show_hide();">
+                              <i class="fas fa-eye" id="show_eye"></i>
+                              <i class="fas fa-eye-slash d-none" id="hide_eye"></i>
+                            </span>
+                          </div>';
+            
+            //$input .= '<input type="'.$type.'" class="form-control" name="'.$name.'" id="'.$name.'" value="'.$value.'" placeholder="'.$value.'" '.$required.' '.$disabled.'><i class="bi bi-eye-slash" id="togglePassword"></i>'                       
+            
         }
-        else if($type == 'textarea'){
+        else if($campo == Campo::AREA_DI_TESTO()){
             $input .= '<textarea rows="4" style="height:100%;" class="form-control" name="'.$name.'" id="'.$name.'" '.$required.' '.$disabled.'>'.$value.'</textarea>'
                     . '<label for="'.$name.'">'.$label.'</label>';
+        }
+        else if($campo == Campo::FILE()){
+            $input .= '<label style="display:block" for="'.$name.'" class="form-label">'.$label.'</label>'
+                    . '<input class="input form-control form-control-lg" id="'.$name.'" value="'.$value.'" name="'.$name.'" type="file" '.$required.' '.$disabled.'>';
         }
         
         $html .= '<div class="'.$classDiv1.'">';
@@ -175,23 +295,38 @@ class PrinterView {
         return $html;
     }
     
-    private function get2ColonneLayout(string $type, string $name, string $label, string $required='', string $value=null, string $disabled='' ): string {
+    private function get2ColonneLayout(string $campo, string $name, string $label, string $required='', string $value=null, string $disabled='' ): string {
         $html = '';  
         $html .= '<div class="row mb-3">';
         $html .=     '<label for="'.$name.'" class="col-sm-3 col-form-label form-label">'.$label.'</label>';
-         $html .=     '<div class="col-sm-9">';
-        if($type == 'price'){
+        $html .=      '<div class="col-sm-9">';
+        if($campo == Campo::PREZZO()){
             $html .=        '<div class="input-group">';
             $html .=         '<input type="number" min="0" step="0.01" class="form-control" name="'.$name.'" value="'.$value.'" id="'.$name.'" '.$required.' '.$disabled.'>';
             $html .=         '<span class="input-group-text" id="basic-addon1">€</span>';
             $html .=        '</div>';
         }
-        else if($type == 'text' || $type == 'email' || $type == 'tel' || $type == 'file'){    
-            $html .=         '<input type="'.$type.'" class="form-control" name="'.$name.'" value="'.$value.'" id="'.$name.'" '.$required.' '.$disabled.'>';
+        else if($campo == Campo::TESTO() || $campo == Campo::EMAIL() || $campo == Campo::TELEFONO()){    
+            $html .=         '<input type="'.$campo.'" class="form-control" name="'.$name.'" value="'.$value.'" id="'.$name.'" '.$required.' '.$disabled.'>';
         }
-        else if($type == 'textarea'){
+        else if($campo == Campo::PASSWORD()){
+         
+            $html .=  '<input name="'.$name.'" type="password" value="" class="input form-control" id="'.$campo.'" placeholder="'.$value.'" required="true" aria-label="password" aria-describedby="basic-addon1" />';            
+            $html .=  '<div class="input-group-append">
+                            <span class="input-group-text show-hide" onclick="password_show_hide();">
+                              <i class="fas fa-eye" id="show_eye"></i>
+                              <i class="fas fa-eye-slash d-none" id="hide_eye"></i>
+                            </span>
+                          </div>';           
+        }
+        else if($campo == Campo::AREA_DI_TESTO()){
             $html .=        '<textarea rows="4" style="height:100%;" class="form-control" name="'.$name.'" id="'.$name.'" '.$required.' '.$disabled.'>'.$value.'</textarea>';
         }
+        else if($campo == Campo::FILE()){
+            $html .= '<input class="input form-control form-control-lg" id="'.$name.'" name="'.$name.'" value="'.$value.'" type="file" '.$required.' '.$disabled.'>';
+            $html .= '<p>'.$value.'</p>';
+        }
+        
         $html .=     '</div>';        
         $html .= '</div>';
         
@@ -199,7 +334,7 @@ class PrinterView {
     }
     
    
-    protected function printSelect(string $modello, string $type, string $name, string $label, array $array, string $required='', string $value=null, string $disabled=''): string{
+    protected function printSelect(string $modello, string $typeSelect, string $name, string $label, array $array, string $required='', string $value=null, string $disabled=''): string{
         //type deve essere o vuoto o con multiple
         $html = '';                
         if($value == null){
@@ -209,7 +344,7 @@ class PrinterView {
         }        
         if($modello == 'float'){
             $html .= '<div class="form-floating mb-3">';            
-            $html .=    $this->getSelect($type, $name, $label, $array, $required, $disabled, $value);            
+            $html .=    $this->getSelect($typeSelect, $name, $label, $array, $required, $disabled, $value);            
             $html .=    '<label for="'.$name.'">'.$label.'</label>';            
             $html .= '</div>';
         }
@@ -217,15 +352,15 @@ class PrinterView {
             $html .= '<div class="row mb-3">';
             $html .=     '<label for="'.$name.'" class="col-sm-3 col-form-label form-label">'.$label.'</label>';
             $html .=     '<div class="col-sm-9">'; 
-            $html .=        $this->getSelect($type, $name, $label, $array, $required, $disabled, $value);            
+            $html .=        $this->getSelect($typeSelect, $name, $label, $array, $required, $disabled, $value);            
             $html .=     '</div>';
             $html .= '</div>';
         }                
         return $html;
     }
     
-    private function getSelect($type, $name, $label, $array, $required, $disabled, $value){
-        //type indica se si tratta di un multiselect o un select normale;ù
+    private function getSelect($typeSelect, $name, $label, $array, $required, $disabled, $value){
+        //type indica se si tratta di un multiselect o un select normale;
         $html = '';
         $multiple = '';
         $script = '<script type="text/javascript">';
@@ -238,7 +373,7 @@ class PrinterView {
         
         $class = 'class="form-select"';
         
-        if($type == 'multiple'){
+        if($typeSelect == 'multiple'){
             $class = ' class="multiselect multiselect-'.$name.'" multiple="multiple" size="'. count($array) .'" ';
             $script .= '';
             $name .= '[]';
@@ -278,10 +413,10 @@ class PrinterView {
     }
    
    
-    protected function check(string $type, string $name, string $label, bool $required=false): bool|string|array{
+    protected function check(string $campo, string $name, string $label, bool $required=false): bool|string|array{
     //I type sono: text, select, file, multiple-select, date, textarea
         $result = false;
-        switch($type){
+        switch($campo){
             case 'text':
             case 'select':
             case 'email':
@@ -291,12 +426,18 @@ class PrinterView {
                 if($required){
                     $result = $this->checkRequiredSingleField($name, $label);
                 }
-                else{
+                else{                    
                     $result = $this->checkSingleField($name);
                 }
                 break;
             case 'file':
-                $result = $this->checkUploadFileField($name);
+                $temp = $this->checkUploadFileField($name);
+                if($temp != null){
+                    $result = $temp['url'];
+                }
+                else{
+                    $result = '';
+                }
                 break;
             case 'multiple-select':
                 //restituisce un array
@@ -360,7 +501,95 @@ class PrinterView {
         return $html;
     }
    
-   
+    private function addAttribute(string $attName, string $attValue):string{        
+        return ' '.$attName.'="'.$attValue.'"';        
+    }
+    
+    private function addClass(string|null $value):string{        
+        $html = '';
+        if($value != null){
+            $html .= $this->addAttribute('class', $value);
+        }
+        return $html;
+    }
+    
+    private function addHref(string|null $value):string{
+        $html = '';
+        if($value != null){
+            $html .= $this->addAttribute('href', $value);
+        }
+        return $html;
+    }  
+    
+    private function addTarget(string|null $value): string{
+        $html = '';
+        if($value != null){
+            $html .= $this->addAttribute('target', $value);
+        }
+        return $html;
+    }
+    
+    private function addData(string|null $dataName, string|null $dataValue):string{
+        $html = '';
+        if($dataName != null && $dataValue != null){
+            $html .= $this->addAttribute('data-'.$dataName, $dataValue);
+        }
+        return $html;
+    }
+    
+    protected function printTitoloTabella(string $titolo): string{
+        return $this->printTitolo('h2', $titolo);
+    }    
+    
+    protected function printTitoloPagina(string $titolo):string{
+        return $this->printTitolo('h2', $titolo, 'titolo');
+    }
+    
+    public function printTitolo(string $tag, string $titolo, string $classe=null):string{
+        $class = $this->addClass($classe);
+        return '<'.$tag.$class.'>'.$titolo.'</'.$tag.'>';
+    }
+    
+    protected function printUrl(string $label, string $url=null, string $class=null, string $target=null): string{
+        $html = '';
+        $html .= '<a';
+        $html .= $this->addClass($class);
+        $html .= $this->addHref($url); 
+        $html .= $this->addTarget($target);
+        $html .= '>'.$label.'</a>';        
+        return $html;
+    }
+    
+    protected function printAlert(string $label):string{
+        return '<div class="alert alert-secondary" role="alert">'.$label.'</div>';
+    }
+    
+    protected function printDiv(string $content, string $class=null, string $dataName=null, string $dataValue=null):string{
+        $html = '';
+        $html .= '<div';
+        $html .= $this->addClass($class);
+        $html .= $this->addData($dataName, $dataValue);        
+        $html .= '>'.$content.'</div>';        
+        return $html;
+    }
+    
+    protected function printDataNumDiv(string $content, string $dataValue, string $class=null):string{
+        return $this->printDiv($content, $class, 'num', $dataValue);
+    }
+    
+    protected function strongText(string $label):string{
+        return '<strong>'.$label.'</strong>';
+    }
+    
+    protected function printImage(string $url, string $class=null):string{
+        $class = '';
+        if($class != null){
+            $class = 'class="'.$class.'"';
+        }
+        return '<img src="'.$url.'" '.$class.' />';
+    }
+
+
     /***********************************************************/
     /*** FINE AGGIORNAMENTO BLOCCHI CON LA CDN DI BOOTSTRAP v.5.3 ***/
     /***********************************************************/
@@ -375,8 +604,7 @@ class PrinterView {
             $html = 'enctype="multipart/form-data"';
         }
     ?>
-        <form class="form-horizontal" role="form" action="<?php echo curPageURL() ?>" name="<?php echo FRM_ADD.$name ?>" method="POST" <?php echo $html ?> >   
-            ciao
+        <form class="form-horizontal" role="form" action="<?php echo curPageURL() ?>" name="<?php echo FRM_ADD.$name ?>" method="POST" <?php echo $html ?> >               
     <?php
     }
     
@@ -722,7 +950,7 @@ class PrinterView {
         return $html;
     }
     
-    
+    /*
     protected function printImage($label, $url){
     ?>
         <div class="form-group">
@@ -733,6 +961,8 @@ class PrinterView {
         </div>
     <?php
     }
+    */
+    
     
     /**
      * Funzione che stampa a video una input hidden
@@ -1392,11 +1622,11 @@ class PrinterView {
      * @param type $save
      * @return type
      */
-    protected function printMessaggeAfterSave($type, $save){
+    protected function printMessageAfterSave($type, $save){
         // save == -1 --> elemento già inserito
         // save == false --> errore
         // save > 0 --> salvataggio con successo
-        
+                
         if($save === -1){
             return $this->printErrorBoxMessage($type.' già presente nel sistema.');            
         }
@@ -1420,7 +1650,7 @@ class PrinterView {
             return $this->printOkBoxMessage('Aggiornamento avvenuto con successo!');                      
         }
         else if($update === false){
-            return $this->printWarningBoxMessage('Aggiornamento non necessario.');            
+            return $this->printOkBoxMessage('Aggiornamento avvenuto con successo!');             
         }
     }
     
@@ -1560,7 +1790,7 @@ class PrinterView {
      * @return boolean
      */
     protected function checkSingleField($nameField){
-        if(isset($_POST[$nameField]) && trim($_POST[$nameField]) != ''){
+        if(isset($_POST[$nameField]) && trim($_POST[$nameField]) != ''){            
             return trim($_POST[$nameField]);
         }
         return false;
