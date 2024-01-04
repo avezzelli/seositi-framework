@@ -157,7 +157,7 @@ class PrinterView {
     } 
 
     /**
-     * Aggiunge u
+     * Restituisce un form di salvataggio passando il contenuto come parametro
      * @param string $name
      * @param string $content
      * @param bool $files
@@ -176,6 +176,13 @@ class PrinterView {
         return $html;
     }
     
+    /**
+     * Restituisce un form dettaglio passando il contenuto come parametro
+     * @param string $name
+     * @param string $content
+     * @param bool $files
+     * @return string
+     */
     protected function detailForm(string $name, string $content, bool $files=false): string{
         $html = '';
         $add = '';
@@ -594,50 +601,6 @@ class PrinterView {
     /*** FINE AGGIORNAMENTO BLOCCHI CON LA CDN DI BOOTSTRAP v.5.3 ***/
     /***********************************************************/
 
-    /**
-     * La funzione stampa per comodità l'apertura del tag form
-     * @param type $name
-     */
-    protected function printStartAddForm($name, $files=false){
-        $html = '';
-        if($files == true){        
-            $html = 'enctype="multipart/form-data"';
-        }
-    ?>
-        <form class="form-horizontal" role="form" action="<?php echo curPageURL() ?>" name="<?php echo FRM_ADD.$name ?>" method="POST" <?php echo $html ?> >               
-    <?php
-    }
-    
-    /**
-     * La funzione stampa per comodita il bottone submit e la chiusura del tag form
-     * @param type $name
-     */
-    protected function printEndAddForm($name){
-    ?>
-            <?php $this->printSubmitFormField(FRM_SAVE.$name, 'SALVA') ?>
-        </form>
-    <?php
-    }
-    
-    protected function printStartDetailsForm($name, $files=false){
-        $html = '';
-        if($files == true){        
-            $html = 'enctype="multipart/form-data"';
-        }
-    ?>
-        <form class="form-horizontal" role="form" action="<?php echo curPageURL() ?>" name="<?php echo FRM_DETAILS.$name ?>" method="POST" <?php echo $html ?> >   
-    <?php
-    }
-    
-    protected function printEndDetailsForm($name, $disabled = null){
-    ?>
-            <?php $this->printUpdateDettaglio($name) ?>
-            <?php if($disabled == null): ?>                                
-                <?php $this->printDeleteDettaglio($name) ?>               
-            <?php endif; ?>
-        </form>
-    <?php    
-    }
     
     protected function printStartSearchForm($name){
     ?>
