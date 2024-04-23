@@ -85,7 +85,19 @@ class Campo{
     }
     public static function FILE(){
         return 'file';
-    }   
+    }  
+    public static function EDITOR(){
+        return 'editor';
+    }
+    public static function CHECKBOX(){
+        return 'checkbox';
+    }
+    public static function SELECT(){
+        return 'select';
+    }
+    public static function DATA(){
+        return 'date';
+    }
 }
 
 class Target{

@@ -216,6 +216,19 @@ class PrinterView {
     protected function linkButton(string $testo, string $link) : string{
         return '<a class="btn btn-outline-primary" href="'.$link.'" role="button">'.$testo.'</a>';
     }
+    
+    private function verifyField(string|int|array|null $value, string $name): string|int|array|null{
+        $result = null;
+        if($value == null){
+            if(isset($_POST[$name])){
+                $result = stripslashes($_POST[$name]);
+            }  
+        }
+        else{
+            $result = stripslashes($value);
+        }
+        return $result;
+    }
       
     /**
      * La funzione restituisce la stampa di un oggetto html input (definito dal type)
@@ -230,14 +243,8 @@ class PrinterView {
      */
     protected function printInput(string $modello, string $campo, string $name, string $label, string $required='', string $value=null, string $disabled=''): string{
         $html = ''; 
-        if($value == null){
-            if(isset($_POST[$name])){
-                $value = stripslashes($_POST[$name]);
-            }           
-        }
-        else{
-            $value = stripslashes($value);
-        }
+        $value = $this->verifyField($value, $name);
+        
         //Print Input si compone di tanti elementi a seconda del modello e del type.
         //modello: float e due-colonne
         //type: hidden, price, text, email, tel
@@ -294,6 +301,25 @@ class PrinterView {
             $input .= '<label style="display:block" for="'.$name.'" class="form-label">'.$label.'</label>'
                     . '<input class="input form-control form-control-lg" id="'.$name.'" value="'.$value.'" name="'.$name.'" type="file" '.$required.' '.$disabled.'>';
         }
+        else if($campo == Campo::IMMAGINE()){
+            $immagine = '';
+            if($value != null){
+                $immagine = '<img src="'.$value.'" style="max-width:150px;">';       
+                $input .= '<input class="input-hidden" type="hidden" name="'.$name.'-old" value="'.$value.'" />';
+            }
+            $input .= '<p><strong>'.$label.'</strong></p>'                    
+                    . '<div class="container-immagine">'
+                    . '<div style="display:inline-block; width:65%"><input class="input form-control form-control-lg" id="'.$name.'" value="'.$value.'" name="'.$name.'" type="file" '.$required.' '.$disabled.'></div>'
+                    . '<div style="display:inline-block; width:30%; margin-left:5%; text-align:center; border:1px solid #999; padding:15px;">'.$immagine.'</div>'
+                    . '</div>';
+        }
+        else if($campo == Campo::EDITOR()){
+            ob_start();
+            wp_editor($value, $name);
+            $editorContent = ob_get_clean();
+            $input .= $editorContent;
+            $input .= '<label for="'.$name.'">'.$label.'</label>';            
+        } 
         
         $html .= '<div class="'.$classDiv1.'">';
         $html .=    $input;
@@ -333,6 +359,12 @@ class PrinterView {
             $html .= '<input class="input form-control form-control-lg" id="'.$name.'" name="'.$name.'" value="'.$value.'" type="file" '.$required.' '.$disabled.'>';
             $html .= '<p>'.$value.'</p>';
         }
+        else if($campo == Campo::EDITOR()){
+            ob_start();
+            wp_editor($value, $name);
+            $editorContent = ob_get_clean();
+            $html .= $editorContent;
+        }
         
         $html .=     '</div>';        
         $html .= '</div>';
@@ -344,18 +376,15 @@ class PrinterView {
     protected function printSelect(string $modello, string $typeSelect, string $name, string $label, array $array, string $required='', string $value=null, string $disabled=''): string{
         //type deve essere o vuoto o con multiple
         $html = '';                
-        if($value == null){
-            if(isset($_POST[$name])){
-                $value = stripslashes($_POST[$name]);
-            }
-        }        
-        if($modello == 'float'){
+        $value = $this->verifyField($value, $name);
+        
+        if($modello == Modello::FLOAT()){
             $html .= '<div class="form-floating mb-3">';            
             $html .=    $this->getSelect($typeSelect, $name, $label, $array, $required, $disabled, $value);            
             $html .=    '<label for="'.$name.'">'.$label.'</label>';            
             $html .= '</div>';
         }
-        else if($modello == 'due-colonne'){
+        else if($modello == Modello::DUE_COLONNE()){
             $html .= '<div class="row mb-3">';
             $html .=     '<label for="'.$name.'" class="col-sm-3 col-form-label form-label">'.$label.'</label>';
             $html .=     '<div class="col-sm-9">'; 
@@ -410,6 +439,43 @@ class PrinterView {
         }           
         return $html;
     }
+    
+    protected function printCheckBox(string $modello, string $name, string $label, array $array, int|string|array|null $value=null): string{
+        $html = '';
+        $value = $this->verifyField($value, $name);
+        
+        if($modello == Modello::FLOAT()){
+            $html .= '<div class="form-floating mb-3">';            
+            $html .=    $this->getCheckBox($name, $label, $array, $value);                
+            $html .=    '<label for="'.$name.'">'.$label.'</label>';            
+            $html .= '</div>';
+        }
+        else if($modello == Modello::DUE_COLONNE()){
+            $html .= '<div class="row mb-3">';
+            $html .=     '<label for="'.$name.'" class="col-sm-3 col-form-label form-label">'.$label.'</label>';
+            $html .=     '<div class="col-sm-9">'; 
+            $html .=        $this->getCheckBox($name, $label, $array, $value);                
+            $html .=     '</div>';
+            $html .= '</div>';
+        }
+        
+        return $html;
+    }
+    
+    private function getCheckBox(string $name, string $label, array $array, int|string|array|null $value): string{
+        $html = '';
+        $html .= '<div class="form-check">';
+        foreach($array as $k => $v){
+            $checked = '';
+            if($value == $k){
+                $checked = 'checked ';
+            }            
+            $html .= '<input class="form-check-input" type="checkbox" name="'.$name.'" value="'.$k.'" '.$checked.' >';
+            $html .= '<label class="form-check-label">'.$v.'</label>';
+        }        
+        $html .= '</div>';
+        return $html;
+    }
    
    //Error Message
     protected function errorBox(string $message): string{
@@ -420,16 +486,19 @@ class PrinterView {
     }
    
    
+     /*************** FUNZIONI CHECK **********/
+    
     protected function check(string $campo, string $name, string $label, bool $required=false): bool|string|array{
-    //I type sono: text, select, file, multiple-select, date, textarea
+    //I type sono: text, select, file, multiple-select, date, textarea, immagine
         $result = false;
         switch($campo){
-            case 'text':
-            case 'select':
-            case 'email':
-            case 'tel':
-            case 'textarea':
-            case 'price':
+            case Campo::TESTO():
+            case Campo::SELECT():
+            case Campo::EMAIL():
+            case Campo::TELEFONO():
+            case Campo::AREA_DI_TESTO():
+            case Campo::PREZZO():
+            case Campo::CHECKBOX():
                 if($required){
                     $result = $this->checkRequiredSingleField($name, $label);
                 }
@@ -437,7 +506,7 @@ class PrinterView {
                     $result = $this->checkSingleField($name);
                 }
                 break;
-            case 'file':
+            case Campo::FILE():
                 $temp = $this->checkUploadFileField($name);
                 if($temp != null){
                     $result = $temp['url'];
@@ -446,11 +515,22 @@ class PrinterView {
                     $result = '';
                 }
                 break;
+            case Campo::IMMAGINE():
+                //verifico se è stata caricata una nuova immagine
+                $temp = $this->checkUploadFileField($name);
+                if($temp != null){
+                    $result = $temp['url'];
+                }
+                else{
+                    //se non c'è nulla utilizzo il vecchio valore dell'immagine
+                    $result = $this->checkSingleField($name.'-old');
+                }
+                break;                
             case 'multiple-select':
                 //restituisce un array
                 $result = $this->checkMultipleSelectField($name);                 
                 break;
-            case 'date':
+            case Campo::DATA():
                 $result = $this->checkDateField($name, $label);
                 break;
             default:
@@ -458,6 +538,96 @@ class PrinterView {
         }
         return $result;       
     }
+    
+    /**
+     * La funzione controlla il valore di un campo obbligatorio e lo restituisce in caso di successo, false in caso di errore
+     * @param type $nameField
+     * @return boolean
+     */
+    protected function checkRequiredSingleField($nameField, $labelField){
+       
+        if(isset($_POST[$nameField]) && trim($_POST[$nameField]) != ''){
+            return trim($_POST[$nameField]);
+        }
+        $this->printErrorBoxMessage('Campo '.$labelField.' mancante o non corretto.');
+        return false;        
+    }
+    
+    /**
+     * La funzione controlla il valore di un campo e lo restitusce se questo è stato compilato
+     * @param type $nameField
+     * @return boolean
+     */
+    protected function checkSingleField($nameField){
+        if(isset($_POST[$nameField]) && trim($_POST[$nameField]) != ''){            
+            return trim($_POST[$nameField]);
+        }
+        return false;
+    }
+    
+    /**
+     * La funzione controlla il file multimediale caricato e lo salva nella cartella uploads di wordpress
+     * @param type $nameField
+     * @return type
+     */
+    protected function checkUploadFileField($nameField){       
+        $upload = null;
+        if(isset($_FILES[$nameField])){
+           if($_FILES[$nameField]['error'] == 0){
+               //salvo il file su wp
+               $upload = wp_upload_bits($_FILES[$nameField]["name"], null, file_get_contents($_FILES[$nameField]["tmp_name"]));
+           }           
+        }
+        return $upload;
+    }
+    
+    /**
+     * La funzione controlla un multiple select field e restituisce i campi in un array
+     * @param type $nameField
+     * @return array
+     */
+    protected function checkMultipleSelectField($nameField){  
+        print_r($_POST[$nameField]);
+        if(isset($_POST[$nameField]) && count($_POST[$nameField]) > 0){
+            $result = array();
+            foreach($_POST[$nameField] as $item){
+                array_push($result, $item);
+            }
+            return $result;
+        }
+        return false;
+        
+    }
+    
+    /**
+     * La funzione controlla il valore di una data e lo restituisce se questo è stato compilato
+     * @param type $nameField
+     * @param type $labelField
+     * @return boolean
+     */
+    protected function checkDateField($nameField, $labelField){
+        if(isset($_POST[$nameField.'-d']) && isset($_POST[$nameField.'-m']) && isset($_POST[$nameField.'-y'])){
+           //conversione in timestamp
+            $d = "";
+            if(intval($_POST[$nameField.'-d']) < 10){
+                $d = '0'.$_POST[$nameField.'-d'];
+            }
+            else{
+                 $d = ''.$_POST[$nameField.'-d'];
+            }
+            $m = $_POST[$nameField.'-m'];
+            $y = $_POST[$nameField.'-y'];
+            
+            //$dtime = DateTime::createFromFormat("d/m/Y H:i", $d."/".$m."/".$y." 00:00");
+            $timestamp = date($y.'-'.$m.'-'.$d);
+            
+            return $timestamp;
+        }
+        return false;
+    }
+    
+    
+    /*************** FINE FUNZIONI CHECK **********/
     
     
     protected function printTable(string $name, array $header, array $rows): string{
@@ -601,6 +771,51 @@ class PrinterView {
     /*** FINE AGGIORNAMENTO BLOCCHI CON LA CDN DI BOOTSTRAP v.5.3 ***/
     /***********************************************************/
 
+    /**
+     * La funzione stampa per comodità l'apertura del tag form
+     * @param type $name
+     */
+    protected function printStartAddForm($name, $files=false){
+        $html = '';
+        if($files == true){        
+            $html = 'enctype="multipart/form-data"';
+        }
+    ?>
+        <form class="form-horizontal" role="form" action="<?php echo curPageURL() ?>" name="<?php echo FRM_ADD.$name ?>" method="POST" <?php echo $html ?> >   
+            ciao
+    <?php
+    }
+    
+    /**
+     * La funzione stampa per comodita il bottone submit e la chiusura del tag form
+     * @param type $name
+     */
+    protected function printEndAddForm($name){
+    ?>
+            <?php $this->printSubmitFormField(FRM_SAVE.$name, 'SALVA') ?>
+        </form>
+    <?php
+    }
+    
+    protected function printStartDetailsForm($name, $files=false){
+        $html = '';
+        if($files == true){        
+            $html = 'enctype="multipart/form-data"';
+        }
+    ?>
+        <form class="form-horizontal" role="form" action="<?php echo curPageURL() ?>" name="<?php echo FRM_DETAILS.$name ?>" method="POST" <?php echo $html ?> >   
+    <?php
+    }
+    
+    protected function printEndDetailsForm($name, $disabled = null){
+    ?>
+            <?php $this->printUpdateDettaglio($name) ?>
+            <?php if($disabled == null): ?>                                
+                <?php $this->printDeleteDettaglio($name) ?>               
+            <?php endif; ?>
+        </form>
+    <?php    
+    }
     
     protected function printStartSearchForm($name){
     ?>
@@ -768,7 +983,7 @@ class PrinterView {
     <?php      
         
     }
-    
+           
     protected function printDisabledTextAreaFormField($nameField, $label, $value){
     ?>
         <div class="form-group">
@@ -1732,94 +1947,6 @@ class PrinterView {
         return $html;
     }
 
-    
-    /**
-     * La funzione controlla il valore di un campo obbligatorio e lo restituisce in caso di successo, false in caso di errore
-     * @param type $nameField
-     * @return boolean
-     */
-    protected function checkRequiredSingleField($nameField, $labelField){
-       
-        if(isset($_POST[$nameField]) && trim($_POST[$nameField]) != ''){
-            return trim($_POST[$nameField]);
-        }
-        $this->printErrorBoxMessage('Campo '.$labelField.' mancante o non corretto.');
-        return false;        
-    }
-    
-    /**
-     * La funzione controlla il valore di un campo e lo restitusce se questo è stato compilato
-     * @param type $nameField
-     * @return boolean
-     */
-    protected function checkSingleField($nameField){
-        if(isset($_POST[$nameField]) && trim($_POST[$nameField]) != ''){            
-            return trim($_POST[$nameField]);
-        }
-        return false;
-    }
-    
-    /**
-     * La funzione controlla il file multimediale caricato e lo salva nella cartella uploads di wordpress
-     * @param type $nameField
-     * @return type
-     */
-    protected function checkUploadFileField($nameField){       
-        $upload = null;
-        if(isset($_FILES[$nameField])){
-           if($_FILES[$nameField]['error'] == 0){
-               //salvo il file su wp
-               $upload = wp_upload_bits($_FILES[$nameField]["name"], null, file_get_contents($_FILES[$nameField]["tmp_name"]));
-           }           
-        }
-        return $upload;
-    }
-    
-    /**
-     * La funzione controlla un multiple select field e restituisce i campi in un array
-     * @param type $nameField
-     * @return array
-     */
-    protected function checkMultipleSelectField($nameField){  
-        print_r($_POST[$nameField]);
-        if(isset($_POST[$nameField]) && count($_POST[$nameField]) > 0){
-            $result = array();
-            foreach($_POST[$nameField] as $item){
-                array_push($result, $item);
-            }
-            return $result;
-        }
-        return false;
-        
-    }
-    
-    /**
-     * La funzione controlla il valore di una data e lo restituisce se questo è stato compilato
-     * @param type $nameField
-     * @param type $labelField
-     * @return boolean
-     */
-    protected function checkDateField($nameField, $labelField){
-        if(isset($_POST[$nameField.'-d']) && isset($_POST[$nameField.'-m']) && isset($_POST[$nameField.'-y'])){
-           //conversione in timestamp
-            $d = "";
-            if(intval($_POST[$nameField.'-d']) < 10){
-                $d = '0'.$_POST[$nameField.'-d'];
-            }
-            else{
-                 $d = ''.$_POST[$nameField.'-d'];
-            }
-            $m = $_POST[$nameField.'-m'];
-            $y = $_POST[$nameField.'-y'];
-            
-            //$dtime = DateTime::createFromFormat("d/m/Y H:i", $d."/".$m."/".$y." 00:00");
-            $timestamp = date($y.'-'.$m.'-'.$d);
-            
-            return $timestamp;
-        }
-        return false;
-    }
-    
     public function translateDate($date){       
         //la data si suddivide in nome del giorno, numero e mese        
         $temp = explode('-', $date);
