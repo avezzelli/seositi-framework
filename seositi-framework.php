@@ -4,7 +4,7 @@
   Plugin Name: SeoSiti Framework
   Plugin URI:
   Description: Framework per l'utilizzo dei prodotti SeoSiti
-  Version: 1.1
+  Version: 1.1.1
   Author: SeoSiti Developing Team
   Author URI: https://www.seositimarketing.it/
   License: GPLv2 or later
