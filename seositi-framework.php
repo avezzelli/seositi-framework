@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: SeoSiti Framework
  * Plugin URI:
@@ -44,12 +45,13 @@ require_once SSF_PATH . 'assets/functions.php';
  * I plugin child possono attivare il caricamento dove necessario usando:
  * add_filter('ssf_load_assets', '__return_true');
  */
-function ssf_register_public_assets() {
+function ssf_register_public_assets()
+{
     // Registrazione Stili
     wp_register_style('ssf_bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css', array(), '5.3.0');
     wp_register_style('ssf_bootstrap_docs', 'https://getbootstrap.com/docs/5.3/assets/css/docs.css', array(), '5.3.0');
     wp_register_style('ssf_datatable', 'https://cdn.datatables.net/1.13.2/css/jquery.dataTables.min.css', array(), '1.13.2');
-    
+
     wp_register_style('ssf_file_input', SSF_URL . 'css/fileinput.min.css', array(), '1.0');
     wp_register_style('ssf_multiple', SSF_URL . 'css/multiple-select.css', array(), '1.0');
     wp_register_style('ssf_chosen', SSF_URL . 'css/chosen.css', array(), '1.0');
@@ -57,15 +59,15 @@ function ssf_register_public_assets() {
     wp_register_style('ssf_styles', SSF_URL . 'css/styles.css', array(), '2.0');
 
     // Registrazione Script
-    wp_register_script('ssf_ui_widget', SSF_URL . 'js/jquery-ui.min.js', array('jquery'), '1.0', true);       
-    wp_register_script('ssf_file_input', SSF_URL . 'js/fileinput.min.js', array('jquery'), '1.0', true); 
-    wp_register_script('ssf_livequery', SSF_URL . 'js/jquery.livequery.js', array('jquery'), '1.0', true);       
-    wp_register_script('ssf_scripts', SSF_URL . 'js/scripts.js', array('jquery'), '2.0', true);   
+    wp_register_script('ssf_ui_widget', SSF_URL . 'js/jquery-ui.min.js', array('jquery'), '1.0', true);
+    wp_register_script('ssf_file_input', SSF_URL . 'js/fileinput.min.js', array('jquery'), '1.0', true);
+    wp_register_script('ssf_livequery', SSF_URL . 'js/jquery.livequery.js', array('jquery'), '1.0', true);
+    wp_register_script('ssf_scripts', SSF_URL . 'js/scripts.js', array('jquery'), '2.0', true);
     wp_register_script('ssf_multiple_select', SSF_URL . 'js/multiple-select.js', array('jquery'), '1.0', true);
-    wp_register_script('ssf_chosen', SSF_URL . 'js/chosen.jquery.min.js', array('jquery'), '1.0', true); 
+    wp_register_script('ssf_chosen', SSF_URL . 'js/chosen.jquery.min.js', array('jquery'), '1.0', true);
     wp_register_script('ssf_bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js', array('jquery'), '5.3.0', true);
-    wp_register_script('ssf_datepicker', SSF_URL . 'js/bootstrap-datepicker.min.js', array('jquery'), '1.0', true); 
-    wp_register_script('ssf_datepicker_it', SSF_URL . 'js/bootstrap-datepicker.it.min.js', array('jquery', 'ssf_datepicker'), '1.0', true);     
+    wp_register_script('ssf_datepicker', SSF_URL . 'js/bootstrap-datepicker.min.js', array('jquery'), '1.0', true);
+    wp_register_script('ssf_datepicker_it', SSF_URL . 'js/bootstrap-datepicker.it.min.js', array('jquery', 'ssf_datepicker'), '1.0', true);
     wp_register_script('ssf_datatable', 'https://cdn.datatables.net/1.13.2/js/jquery.dataTables.min.js', array('jquery'), '1.13.2', true);
 
     // Variabili AJAX
