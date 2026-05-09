@@ -2,102 +2,102 @@
 
 namespace seositiframework;
 
-/* * ******************* CREATE TABLES ******************* */
+/**
+ * API per la gestione dello schema del database.
+ *
+ * Fornisce funzioni per creare e rimuovere tabelle personalizzate
+ * nel database WordPress, utilizzate dai plugin child.
+ *
+ * @package SeoSitiFramework
+ * @since   2.0
+ */
 
 /**
-
- * Funzione personalizzata per creare tabelle nel database
- * @global type $wpdb
- * @param type $tabella, indica il nome della tabella da creare
- * @param type $param, indica una serie di parametri che popolano gli attributi
- * @param type $fks, indica una serie di collegamenti a chiave esterna
- * @return boolean
-
+ * Crea una tabella personalizzata nel database WordPress.
+ *
+ * Utilizza dbDelta() per la creazione compatibile con gli aggiornamenti.
+ * NON sovrascrive $wpdb->prefix: usa una variabile locale con DB_PREFIX.
+ *
+ * @param string     $tabella Nome della tabella (senza prefisso).
+ * @param array      $param   Array di definizioni colonne, ognuna con 'nome', 'tipo', e opzionalmente 'null'.
+ * @param array|null $fks     Array opzionale di foreign keys, ognuna con 'key1' e 'tabella'.
+ * @return bool True se la tabella è stata creata con successo.
  */
-function creaTabella($tabella, $param, $fks = null) {
+function ssf_crea_tabella(string $tabella, array $param, ?array $fks = null): bool {
 
     global $wpdb;
-    $charset_collate = "";
-    //prefisso --> pps = plugin preventivi serrature
 
-    $wpdb->prefix = DB_PREFIX;
+    $prefix = $wpdb->prefix;
+    $table_name = $prefix . $tabella;
 
-    if (!empty($wpdb->charset)) {
+    $charset_collate = '';
+    if (! empty($wpdb->charset)) {
         $charset_collate = "DEFAULT CHARACTER SET {$wpdb->charset}";
     }
-
-    if (!empty($wpdb->collate)) {
+    if (! empty($wpdb->collate)) {
         $charset_collate .= " COLLATE {$wpdb->collate}";
     }
 
-    $table = $wpdb->prefix . $tabella;
-    $query = "CREATE TABLE IF NOT EXISTS $table (";
-    $query .= DBT_ID . " INT NOT NULL auto_increment PRIMARY KEY,";
-
-    $counter = 0;
+    // Costruzione della query CREATE TABLE
+    $query = "CREATE TABLE IF NOT EXISTS {$table_name} (";
+    $query .= SSF_DBT_ID . " INT NOT NULL AUTO_INCREMENT PRIMARY KEY";
 
     foreach ($param as $p) {
-        $query .= " " . $p['nome'] . " " . $p['tipo'];
+        $query .= ", " . $p['nome'] . " " . $p['tipo'];
         if (isset($p['null'])) {
             $query .= " " . $p['null'];
         }
-
-        if ($counter == count($param) - 1) {
-
-        } else {
-            $query .= ",";
-        }
-
-        $counter++;
     }
 
-    if ($fks != null) {
-        $counter = 0;
-        $query .= ',';
+    // Aggiunta delle foreign keys
+    if ($fks !== null) {
         foreach ($fks as $fk) {
-            $query .= " FOREIGN KEY (" . $fk['key1'] . ") REFERENCES " . $wpdb->prefix . $fk['tabella'] . "(" . DBT_ID . ")";
-            if ($counter == count($fks) - 1) {
-
-            } else {
-                $query .= ",";
-            }
-
-            $counter++;
+            $fk_table = $prefix . $fk['tabella'];
+            $query .= ", FOREIGN KEY (" . $fk['key1'] . ") REFERENCES " . $fk_table . "(" . SSF_DBT_ID . ")";
         }
     }
-    $query .= ");{$charset_collate}";
 
-       
+    // charset_collate va DENTRO la definizione della tabella per dbDelta
+    $query .= ") {$charset_collate};";
+
     try {
-        require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($query);
-       
         return true;
-    } catch (Exception $ex) {
-        _e($ex);
+    } catch (\Exception $ex) {
+        error_log('[SSF] Errore creazione tabella ' . $tabella . ': ' . $ex->getMessage());
         return false;
     }
 }
-
-/* * ******************* DROP TABLES ****************** */
 
 /**
- * Funzione personalizzata per droppare tabelle dal database
- * @global type $wpdb
- * @param type $tabella
- * @return boolean
+ * Rimuove una tabella personalizzata dal database WordPress.
+ *
+ * Esegue un DROP TABLE IF EXISTS. Il nome della tabella viene
+ * validato per contenere solo caratteri alfanumerici e underscore
+ * (prevenzione SQL Injection).
+ *
+ * @param string $tabella Nome della tabella (senza prefisso).
+ * @return bool True se la tabella è stata rimossa con successo.
  */
-function dropTabella($tabella) {
+function ssf_drop_tabella(string $tabella): bool {
+
     global $wpdb;
-    $wpdb->prefix = DB_PREFIX;
+
+    // Validazione del nome tabella: solo alfanumerici e underscore
+    if (! preg_match('/^[a-zA-Z0-9_]+$/', $tabella)) {
+        error_log('[SSF] Nome tabella non valido per drop: ' . $tabella);
+        return false;
+    }
+
+    $table_name = $wpdb->prefix . $tabella;
+
     try {
-        $query = "DROP TABLE IF EXISTS " . $wpdb->prefix . $tabella . ";";
-        $wpdb->query($query);
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange -- Drop intenzionale via API SSF.
+        $wpdb->query("DROP TABLE IF EXISTS `{$table_name}`");
         return true;
-    } catch (Exception $ex) {
-        _e($ex);
+    } catch (\Exception $ex) {
+        error_log('[SSF] Errore drop tabella ' . $tabella . ': ' . $ex->getMessage());
         return false;
     }
 }
-
-?>

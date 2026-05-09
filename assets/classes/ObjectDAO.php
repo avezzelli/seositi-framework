@@ -3,271 +3,352 @@
 namespace seositiframework;
 
 /**
- * Object DAO è una classe astratta che definisce i metodi
- * di comunicazione con il database
+ * ObjectDAO è la classe astratta base per il pattern Data Access Object.
  *
- * @author SeoSiti Developing Team
+ * Gestisce tutte le operazioni CRUD sul database tramite $wpdb,
+ * utilizzando prepared statements per prevenire SQL Injection.
+ *
+ * Le classi concrete devono implementare updateToObj() e newObj()
+ * per definire la mappatura tra record DB e oggetti del dominio.
+ *
+ * @package SeoSitiFramework
+ * @since   2.0
  */
-
 abstract class ObjectDAO {
-    
-    private $wpdb;
-    private $table;
-    
-    abstract function updateToObj(MyObject $o);      
-    abstract function newObj();
 
-    function __construct($table) {
+    /** @var \wpdb Istanza del database WordPress */
+    private $wpdb;
+
+    /** @var string Nome completo della tabella (con prefisso) */
+    private string $table;
+
+    /**
+     * Converte i dati di un form/request in proprietà dell'oggetto.
+     *
+     * @param MyObject $o Oggetto da aggiornare.
+     * @return void
+     */
+    abstract protected function updateToObj(MyObject $o): void;
+
+    /**
+     * Crea e restituisce una nuova istanza dell'oggetto concreto.
+     *
+     * @return MyObject Nuova istanza.
+     */
+    abstract protected function newObj(): MyObject;
+
+    /**
+     * Costruttore: inizializza la connessione al database e il nome della tabella.
+     *
+     * @param string $table Nome della tabella (senza prefisso).
+     */
+    public function __construct(string $table) {
         global $wpdb;
         $this->wpdb = $wpdb;
-        $this->wpdb->prefix = DB_PREFIX;
-        $this->table = $this->wpdb->prefix . $table;
+
+        // Standardizzato con il prefisso di sistema WordPress
+        $this->table = $wpdb->prefix . $table;
     }
-    
+
     /**
-     * Funzione di salvataggio di un oggetto nel database
-     * @param type $campi
-     * @param type $formato
-     * @return boolean
+     * Salva un nuovo oggetto nel database.
+     *
+     * Utilizza $wpdb->insert() che gestisce internamente i prepared statements.
+     *
+     * @param array $campi   Array associativo campo => valore.
+     * @param array $formato Array di formati ('%s', '%d', '%f').
+     * @return int|false ID del record inserito, o false in caso di errore.
      */
-    protected function saveObject($campi, $formato) {
-
-        //salvo un oggetto generico
+    protected function saveObject(array $campi, array $formato): int|false {
         try {
-            $this->wpdb->insert(
-                    $this->table,
-                    $campi,
-                    $formato
-            );
+            $result = $this->wpdb->insert($this->table, $campi, $formato);
 
-            //$this->wpdb->show_errors();
-            //$this->wpdb->print_error();
+            if ($result === false) {
+                error_log('[SSF] Errore insert su ' . $this->table . ': ' . $this->wpdb->last_error);
+                return false;
+            }
 
             return $this->wpdb->insert_id;
-        } catch (Exception $ex) {
-            print_r($ex);
+        } catch (\Exception $ex) {
+            error_log('[SSF] Eccezione in saveObject: ' . $ex->getMessage());
             return false;
         }
     }
-    
-    /**
-     * La funzione restituisce un array di oggetti a seconda se è stato impostato un offset
-     * @param type $where
-     * @param type $offset
-     * @return type
-     */
-    protected function getObjectsDAO($where = null, $order = null, $offset = null) {
 
-        $temp = null;
+    /**
+     * Recupera oggetti dal database con paginazione opzionale.
+     *
+     * Wrapper per getObjects() che aggiunge supporto all'offset.
+     *
+     * @param array|null $where  Condizioni WHERE.
+     * @param array|null $order  Ordinamento.
+     * @param int|null   $offset Offset per la paginazione.
+     * @return array|null Risultati o null.
+     */
+    protected function getObjectsDAO(?array $where = null, ?array $order = null, ?int $offset = null): ?array {
         if ($offset !== null) {
-            $temp = $this->getObjects(null, $where, $order, ELEMENTI_PER_PAGINA, $offset);
-        } else {
-            $temp = $this->getObjects(null, $where, $order);
+            return $this->getObjects(null, $where, $order, SSF_ELEMENTI_PER_PAGINA, $offset);
         }
-        return $temp;
+        return $this->getObjects(null, $where, $order);
     }
-    
-    /**
-     * La funzione passati i parametri di select, where e order restituisce un oggetto 
-     * @param type $select --> array(...,...,...)
-     * @param type $where --> array(array('campo' => x, 'valore' => y, 'formato' => z))
-     * @param type $order --> array(array('campo' => x, 'ordine' => y) )
-     * @return type
-     */
-    protected function getObjects($select = null, $where = null, $order = null, $limit = null, $offset = null) {
 
-        //Vengono indicati i campi di select
+    /**
+     * Costruisce e esegue una query SELECT parametrizzata.
+     *
+     * Utilizza $wpdb->prepare() per tutti i valori utente,
+     * prevenendo SQL Injection.
+     *
+     * @param array|null $select Campi da selezionare (null = tutti).
+     * @param array|null $where  Condizioni WHERE. Ogni elemento è un array con:
+     *                           - 'campo'     => nome colonna
+     *                           - 'valore'    => valore da confrontare
+     *                           - 'formato'   => 'INT' | 'NUM' | 'TEXT' (default)
+     *                           - 'operatore' => (opzionale) '=', '<=', '>=', 'LIKE'
+     * @param array|null $order  Ordinamento. Ogni elemento è un array con:
+     *                           - 'campo'  => nome colonna
+     *                           - 'ordine' => 'ASC' | 'DESC'
+     * @param int|null   $limit  Numero massimo di risultati.
+     * @param int|null   $offset Offset iniziale.
+     * @return array|null Array associativo dei risultati, o null in caso di errore.
+     */
+    protected function getObjects(
+        ?array $select = null,
+        ?array $where = null,
+        ?array $order = null,
+        ?int $limit = null,
+        ?int $offset = null
+    ): ?array {
+
+        $prepare_values = array();
+
+        // SELECT clause
         $query = "SELECT";
         if ($select === null) {
             $query .= " *";
         } else {
-            $counter = 0;
-            foreach ($select as $value) {
-                $query .= " " . $value;
-                if ($counter == count($select) - 1) {                    
-                } else {
-                    $query .= ",";
-                }
-                $counter++;
+            // I nomi delle colonne vengono validati come identificatori
+            $safe_columns = array();
+            foreach ($select as $col) {
+                $safe_columns[] = $this->sanitizeIdentifier($col);
             }
+            $query .= " " . implode(", ", $safe_columns);
         }
 
-        //Viene indicata la tabella
+        // FROM clause
         $query .= " FROM " . $this->table;
 
-        //Vegnono indicati i campi where (se ce ne sono)
+        // WHERE clause con prepared statements
         if ($where !== null) {
-            $query .= " WHERE 1=1 ";
-            $counter = 0;
+            $query .= " WHERE 1=1";
             foreach ($where as $item) {
-                if (!isset($item['operatore'])) {
-                    if ($item['formato'] == 'INT') {
-                        $query .= " AND " . $item['campo'] . " = " . $item['valore'];
+                $campo = $this->sanitizeIdentifier($item['campo']);
+                $valore = $item['valore'];
+                $formato = $item['formato'] ?? 'TEXT';
+                $operatore = $item['operatore'] ?? '=';
+
+                // Whitelist degli operatori consentiti
+                $operatori_consentiti = array('=', '<=', '>=', '<', '>', '!=', 'LIKE');
+                if (! in_array($operatore, $operatori_consentiti, true)) {
+                    $operatore = '=';
+                }
+
+                // Ignora valori vuoti per campi con operatore personalizzato
+                if (isset($item['operatore']) && $valore === '') {
+                    continue;
+                }
+
+                if ($formato === 'INT' || $formato === 'NUM') {
+                    $query .= " AND {$campo} {$operatore} %d";
+                    $prepare_values[] = intval($valore);
+                } else {
+                    if ($operatore === 'LIKE') {
+                        $query .= " AND {$campo} LIKE %s";
+                        $prepare_values[] = '%' . $this->wpdb->esc_like($valore) . '%';
                     } else {
-                        $queryValore = $item['valore'];
-                        //controllo sul carattere di apostrofo "'" 
-                        if ($item['valore'] !== false) {
-                            $queryValore = str_replace("\'", "\\\''", $queryValore);
-                        }
-
-                        $query .= " AND " . $item['campo'] . " = '" . $queryValore . "'";
-                    }
-                } else {
-                    if ($item['valore'] != '') {
-                        if ($item['formato'] == 'NUM' && $item['valore'] != '') {
-                            $query .= " AND " . $item['campo'] . " " . $item['operatore'] . " " . $item['valore'];
-                        } else {
-                            $queryValore = $item['valore'];
-                            //controllo sul carattere di apostrofo "'" 
-                            if ($item['valore'] !== false) {
-                                $queryValore = str_replace("\'", "\\\''", $queryValore);
-                            }
-                            if ($queryValore != '') {
-                                if ($item['operatore'] == 'LIKE') {
-                                    $query .= " AND " . $item['campo'] . " LIKE '%" . $queryValore . "%'";
-                                } else {
-                                    $query .= " AND " . $item['campo'] . " " . $item['operatore'] . " '" . $queryValore . "'";
-                                }
-                            }
-                        }
+                        $query .= " AND {$campo} {$operatore} %s";
+                        $prepare_values[] = $valore;
                     }
                 }
             }
         }
 
-        //Vengono indicati i campi di order by (se ce ne sono)
+        // ORDER BY clause
         if ($order !== null) {
-            $query .= " ORDER BY";
-            $counter = 0;
+            $order_parts = array();
             foreach ($order as $item) {
-                $query .= " " . $item['campo'] . " " . $item['ordine'];
-                if ($counter == count($order) - 1) {                    
-                } else {
-                    $query .= ",";
-                }
-                $counter++;
+                $campo = $this->sanitizeIdentifier($item['campo']);
+                $ordine = (strtoupper($item['ordine']) === 'DESC') ? 'DESC' : 'ASC';
+                $order_parts[] = "{$campo} {$ordine}";
             }
-        } else {
-            
+            $query .= " ORDER BY " . implode(", ", $order_parts);
         }
 
+        // LIMIT & OFFSET
         if ($limit !== null && $offset !== null) {
-            $query .= " LIMIT " . $offset . ", " . $limit;
+            $query .= " LIMIT %d, %d";
+            $prepare_values[] = $offset;
+            $prepare_values[] = $limit;
         }
 
-        //print_r($query);
         try {
-            //restituisco un array associativo per mantenere le definizioni
-            return $this->wpdb->get_results($query, ARRAY_A);
-        } catch (Exception $ex) {
-            _e($ex);
+            // Usa prepare() solo se ci sono parametri da preparare
+            if (! empty($prepare_values)) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- La query è costruita con placeholder %s/%d
+                $prepared_query = $this->wpdb->prepare($query, $prepare_values);
+            } else {
+                $prepared_query = $query;
+            }
+
+            return $this->wpdb->get_results($prepared_query, ARRAY_A);
+        } catch (\Exception $ex) {
+            error_log('[SSF] Errore in getObjects: ' . $ex->getMessage());
             return null;
         }
     }
-    
-    /**
-     * La funzione esegue una query sul database, con query passata come parametro
-     * @param type $query
-     * @return type
-     */
-    protected function searchObjects($query) {
 
+    /**
+     * Esegue una query di ricerca personalizzata sul database.
+     *
+     * @param string $query Query SQL già preparata.
+     * @return array|null Risultati o null in caso di errore.
+     */
+    protected function searchObjects(string $query): ?array {
         try {
             return $this->wpdb->get_results($query, ARRAY_A);
-        } catch (Exception $ex) {
-            _e($ex);
+        } catch (\Exception $ex) {
+            error_log('[SSF] Errore in searchObjects: ' . $ex->getMessage());
             return null;
         }
     }
-    
-    /**
-     * La funzione elimina un oggetto dal database
-     * @param type $array
-     * @return boolean
-     */
-    protected function deleteObject($array): bool {
 
+    /**
+     * Elimina un record dal database.
+     *
+     * @param array $array Condizioni WHERE per l'eliminazione (campo => valore).
+     * @return bool True se eliminato con successo.
+     */
+    protected function deleteObject(array $array): bool {
         try {
-            $this->wpdb->delete($this->table, $array);
-            return true;
-        } catch (Exception $ex) {
-            _e($ex);
+            $result = $this->wpdb->delete($this->table, $array);
+            return ($result !== false);
+        } catch (\Exception $ex) {
+            error_log('[SSF] Errore in deleteObject: ' . $ex->getMessage());
             return false;
         }
     }
-    
+
     /**
-     * Funzione che elimina un oggetto dal database per ID passato
-     * @param type $ID
-     * @return type
+     * Elimina un record dal database tramite il suo ID.
+     *
+     * @param int $ID Identificativo del record.
+     * @return bool True se eliminato con successo.
      */
-    protected function deleteObjectByID($ID): bool {
-        $array = array('ID' => $ID);
-        return $this->deleteObject($array);
+    protected function deleteObjectByID(int $ID): bool {
+        return $this->deleteObject(array(SSF_DBT_ID => $ID));
     }
-    
+
     /**
-     * La funzione aggiorna un oggetto nel database
-     * @param type $update
-     * @param type $formatUpdate
-     * @param type $where
-     * @param type $formatWhere
-     * @return boolean
+     * Aggiorna un record nel database.
+     *
+     * Utilizza $wpdb->update() che gestisce internamente i prepared statements.
+     *
+     * @param array $update       Array campo => nuovo valore.
+     * @param array $formatUpdate Array di formati per i campi da aggiornare.
+     * @param array $where        Condizioni WHERE per individuare il record.
+     * @param array $formatWhere  Array di formati per le condizioni WHERE.
+     * @return int|false Numero di righe aggiornate, o false in caso di errore.
      */
-    protected function updateObject($update, $formatUpdate, $where, $formatWhere) {
+    protected function updateObject(array $update, array $formatUpdate, array $where, array $formatWhere): int|false {
         try {
-            return $this->wpdb->update(
-                            $this->table,
-                            $update,
-                            $where,
-                            $formatUpdate,
-                            $formatWhere
+            $result = $this->wpdb->update(
+                $this->table,
+                $update,
+                $where,
+                $formatUpdate,
+                $formatWhere
             );
-        } catch (Exception $ex) {
-            _e($ex);
-            return null;
+
+            if ($result === false) {
+                error_log('[SSF] Errore update su ' . $this->table . ': ' . $this->wpdb->last_error);
+            }
+
+            return $result;
+        } catch (\Exception $ex) {
+            error_log('[SSF] Eccezione in updateObject: ' . $ex->getMessage());
+            return false;
         }
     }
-        
-    protected function getTable() {
+
+    /**
+     * Restituisce il nome completo della tabella (con prefisso).
+     *
+     * @return string
+     */
+    protected function getTable(): string {
         return $this->table;
     }
 
-    protected function existsID($ID): bool {
-        $where = array(
-            array(
-                'campo' => DBT_ID,
-                'valore' => $ID,
-                'formato' => 'INT'
-            )
-        );
-
-        if ($this->getObjects(null, $where) != null) {
-            return true;
-        }
-        return false;
+    /**
+     * Restituisce l'istanza di $wpdb per query avanzate nelle classi figlie.
+     *
+     * @return \wpdb
+     */
+    protected function getWpdb(): \wpdb {
+        return $this->wpdb;
     }
 
     /**
-     * Restituisce un singolo oggetto dato uno specifico ID
-     * @param type $ID
-     * @return type
+     * Verifica se un record con il dato ID esiste nella tabella.
+     *
+     * @param int $ID Identificativo del record.
+     * @return bool True se il record esiste.
      */
-    public function getResultByID($ID) {
+    protected function existsID(int $ID): bool {
         $where = array(
             array(
-                'campo' => DBT_ID,
-                'valore' => $ID,
-                'formato' => 'INT'
-            )
+                'campo'   => SSF_DBT_ID,
+                'valore'  => $ID,
+                'formato' => 'INT',
+            ),
+        );
+
+        $result = $this->getObjects(null, $where);
+        return ($result !== null && count($result) > 0);
+    }
+
+    /**
+     * Restituisce un singolo record dal database tramite il suo ID.
+     *
+     * @param int $ID Identificativo del record.
+     * @return array|null Array associativo del record, o null se non trovato.
+     */
+    public function getResultByID(int $ID): ?array {
+        $where = array(
+            array(
+                'campo'   => SSF_DBT_ID,
+                'valore'  => $ID,
+                'formato' => 'INT',
+            ),
         );
 
         $temp = $this->getObjects(null, $where);
 
-        if ($temp != null) {
+        if ($temp !== null && count($temp) > 0) {
             return $temp[0];
         }
         return null;
     }
 
+    /**
+     * Sanitizza un identificatore SQL (nome colonna/tabella).
+     *
+     * Consente solo caratteri alfanumerici, underscore e punto (per alias).
+     * Previene SQL injection nei nomi di colonna.
+     *
+     * @param string $identifier Nome della colonna o tabella.
+     * @return string Identificatore sanitizzato.
+     */
+    private function sanitizeIdentifier(string $identifier): string {
+        return preg_replace('/[^a-zA-Z0-9_.]/', '', $identifier);
+    }
 }
